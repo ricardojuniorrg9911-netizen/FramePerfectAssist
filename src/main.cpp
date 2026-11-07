@@ -86,8 +86,11 @@ namespace {
                     verticalOffset += verticalVelocity * kPhysicsDt;
                 }
 
+                // Horizontal velocity is measured in world units per real second,
+                // so advance by one 240 Hz tick (1/240 s). Vertical jump physics
+                // uses GD's separately normalized 60 Hz delta (0.25 per tick).
                 const float futureRight = playerRight
-                    + horizontalVelocity * (static_cast<float>(step) * kPhysicsDt);
+                    + horizontalVelocity * (static_cast<float>(step) / kPhysicsStepsPerSecond);
                 const float futureLeft = futureRight - playerWidth;
 
                 if (futureRight >= obstacleLeft && futureLeft <= obstacleRight) {
