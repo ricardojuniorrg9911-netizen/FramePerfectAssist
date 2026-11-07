@@ -11,7 +11,7 @@
   "settings": {
     "auto_click": {
       "name": "Auto-click",
-      "description": "Enable the diagnostic cube hazard scanner. It does not send clicks yet.",
+      "description": "Enable the diagnostic cube hazard scanner. It estimates arrival in physics frames; it does not send clicks.",
       "type": "bool",
       "default": false
     },
