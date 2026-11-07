@@ -15,9 +15,15 @@
       "type": "bool",
       "default": false
     },
+    "auto_jump": {
+      "name": "Experimental cube auto-jump",
+      "description": "Test only: queues one jump when the cube is grounded and a hazard is inside the correction window. Disabled by default; timing is not yet validated.",
+      "type": "bool",
+      "default": false
+    },
     "correction_frames": {
       "name": "Correction window",
-      "description": "Diagnostic target window (2–10 frames). Automatic input is not implemented yet.",
+      "description": "Target window for the experimental cube jump test (2–10 physics frames).",
       "type": "int",
       "default": 5,
       "min": 2,
