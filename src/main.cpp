@@ -1,14 +1,17 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
+#include <cmath>
 
 using namespace geode::prelude;
 
 namespace {
-    // Diagnostic-only cube stage. Input is not sent until timing is validated in-game.
+    // Diagnostic-only cube stage. No input is sent until jump timing is validated.
+    constexpr float kPhysicsStepsPerSecond = 240.f;
+    constexpr float kVelocitySmoothing = 0.25f;
+
     int s_lastReportedHazardID = -1;
     int s_lastLoggedEstimate = -1;
-    float s_lastPlayerRight = 0.f;
-    bool s_hasLastPlayerPosition = false;
+    float s_smoothedHorizontalVelocity = 0.f;
 
     bool isCube(PlayerObject* player) {
         return player
@@ -24,8 +27,7 @@ namespace {
     void resetScannerState() {
         s_lastReportedHazardID = -1;
         s_lastLoggedEstimate = -1;
-        s_lastPlayerRight = 0.f;
-        s_hasLastPlayerPosition = false;
+        s_smoothedHorizontalVelocity = 0.f;
     }
 }
 
@@ -35,23 +37,36 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
 
         if (!Mod::get()->getSettingValue<bool>("auto_click")) {
             resetScannerState();
+            m_hasLastPlayerPosition = false;
             return;
         }
 
         auto* player = m_player1;
         if (!player || player->m_isDead || !isCube(player) || !m_objects) {
             resetScannerState();
+            m_hasLastPlayerPosition = false;
             return;
         }
 
-        auto const& playerRect = player->getObjectRect();
-        const float playerRight = playerRect.getMaxX();
-        float movementPerUpdate = 0.f;
-        if (s_hasLastPlayerPosition) {
-            movementPerUpdate = playerRight - s_lastPlayerRight;
+        const float playerRight = player->getObjectRect().getMaxX();
+        const float previousRight = m_lastPlayerRight;
+        const bool hadPreviousPosition = m_hasLastPlayerPosition;
+        m_lastPlayerRight = playerRight;
+        m_hasLastPlayerPosition = true;
+
+        if (hadPreviousPosition && dt > 0.0001f) {
+            const float deltaX = playerRight - previousRight;
+            if (deltaX > 0.f) {
+                const float measuredVelocity = deltaX / dt;
+                if (s_smoothedHorizontalVelocity <= 0.f) {
+                    s_smoothedHorizontalVelocity = measuredVelocity;
+                } else {
+                    s_smoothedHorizontalVelocity =
+                        s_smoothedHorizontalVelocity * (1.f - kVelocitySmoothing)
+                        + measuredVelocity * kVelocitySmoothing;
+                }
+            }
         }
-        s_lastPlayerRight = playerRight;
-        s_hasLastPlayerPosition = true;
 
         GameObject* nearestHazard = nullptr;
         float nearestDistance = std::numeric_limits<float>::max();
@@ -62,7 +77,7 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
                 continue;
             }
 
-            auto const& hazardRect = object->getObjectRect();
+            const auto& hazardRect = object->getObjectRect();
             if (hazardRect.getMaxX() <= playerRight) {
                 continue;
             }
@@ -81,24 +96,26 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
         }
 
         const int hazardID = nearestHazard->m_uniqueID;
-        const int estimatedUpdates = movementPerUpdate > 0.001f
-            ? static_cast<int>(nearestDistance / movementPerUpdate)
+        const int estimatedFrames = s_smoothedHorizontalVelocity > 0.001f
+            ? static_cast<int>(std::ceil(
+                nearestDistance / s_smoothedHorizontalVelocity * kPhysicsStepsPerSecond
+            ))
             : -1;
         const int correctionFrames = Mod::get()->getSettingValue<int>("correction_frames");
 
         if (hazardID != s_lastReportedHazardID) {
             s_lastReportedHazardID = hazardID;
-            s_lastLoggedEstimate = estimatedUpdates;
-            if (estimatedUpdates >= 0) {
+            s_lastLoggedEstimate = estimatedFrames;
+            if (estimatedFrames >= 0) {
                 log::info(
-                    "FPA cube scan: hazard {} is {:.2f} units ahead; estimated {} update steps away.",
+                    "FPA cube scan: hazard {} is {:.2f} units ahead; estimated {} physics frames away.",
                     nearestHazard->m_objectID,
                     nearestDistance,
-                    estimatedUpdates
+                    estimatedFrames
                 );
             } else {
                 log::info(
-                    "FPA cube scan: hazard {} is {:.2f} units ahead; measuring movement.",
+                    "FPA cube scan: hazard {} is {:.2f} units ahead; measuring speed.",
                     nearestHazard->m_objectID,
                     nearestDistance
                 );
@@ -106,24 +123,23 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
             return;
         }
 
-        // Log meaningful estimate changes and the first entry into the configured window.
-        if (estimatedUpdates >= 0) {
+        if (estimatedFrames >= 0) {
             const bool enteredCorrectionWindow =
                 s_lastLoggedEstimate > correctionFrames
-                && estimatedUpdates <= correctionFrames;
+                && estimatedFrames <= correctionFrames;
             const bool changedByTenOrMore =
                 s_lastLoggedEstimate < 0
-                || estimatedUpdates <= s_lastLoggedEstimate - 10
-                || estimatedUpdates >= s_lastLoggedEstimate + 10;
+                || estimatedFrames <= s_lastLoggedEstimate - 10
+                || estimatedFrames >= s_lastLoggedEstimate + 10;
 
             if (enteredCorrectionWindow || changedByTenOrMore) {
                 log::info(
-                    "FPA cube scan: hazard {} is now estimated {} update steps away (correction window: {}).",
+                    "FPA cube scan: hazard {} is now estimated {} physics frames away (configured window: {}).",
                     nearestHazard->m_objectID,
-                    estimatedUpdates,
+                    estimatedFrames,
                     correctionFrames
                 );
-                s_lastLoggedEstimate = estimatedUpdates;
+                s_lastLoggedEstimate = estimatedFrames;
             }
         }
     }
@@ -131,11 +147,17 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
     void resetLevel() {
         PlayLayer::resetLevel();
         resetScannerState();
+        m_hasLastPlayerPosition = false;
+        m_lastPlayerRight = 0.f;
     }
+
+private:
+    float m_lastPlayerRight = 0.f;
+    bool m_hasLastPlayerPosition = false;
 };
 
 $on_mod(Loaded) {
     const int frames = Mod::get()->getSettingValue<int>("correction_frames");
-    log::info("Frame Perfect Assist loaded. Correction window: {} frames.", frames);
+    log::info("Frame Perfect Assist loaded. Correction window: {} physics frames.", frames);
     log::info("Cube hazard scanner is diagnostic only; no automatic input is sent.");
 }
