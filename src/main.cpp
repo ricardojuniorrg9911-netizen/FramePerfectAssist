@@ -48,15 +48,15 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
         auto* player = m_player1;
         if (!player || player->m_isDead || !isCube(player) || !m_objects) {
             resetScannerState();
-            m_hasLastPlayerPosition = false;
+            s_hasLastPlayerPosition = false;
             return;
         }
 
         const float playerRight = player->getObjectRect().getMaxX();
         const float previousRight = s_lastPlayerRight;
-        const bool hadPreviousPosition = m_hasLastPlayerPosition;
-        m_lastPlayerRight = playerRight;
-        m_hasLastPlayerPosition = true;
+        const bool hadPreviousPosition = s_hasLastPlayerPosition;
+        s_lastPlayerRight = playerRight;
+        s_hasLastPlayerPosition = true;
 
         if (hadPreviousPosition && dt > 0.0001f) {
             const float deltaX = playerRight - previousRight;
@@ -151,13 +151,10 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
     void resetLevel() {
         PlayLayer::resetLevel();
         resetScannerState();
-        m_hasLastPlayerPosition = false;
-        m_lastPlayerRight = 0.f;
+        s_hasLastPlayerPosition = false;
+        s_lastPlayerRight = 0.f;
     }
 
-private:
-    float m_lastPlayerRight = 0.f;
-    bool m_hasLastPlayerPosition = false;
 };
 
 $on_mod(Loaded) {
