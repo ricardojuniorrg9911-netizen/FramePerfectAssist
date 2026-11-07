@@ -12,6 +12,8 @@ namespace {
     int s_lastReportedHazardID = -1;
     int s_lastLoggedEstimate = -1;
     float s_smoothedHorizontalVelocity = 0.f;
+    float s_lastPlayerRight = 0.f;
+    bool s_hasLastPlayerPosition = false;
 
     bool isCube(PlayerObject* player) {
         return player
@@ -28,6 +30,8 @@ namespace {
         s_lastReportedHazardID = -1;
         s_lastLoggedEstimate = -1;
         s_smoothedHorizontalVelocity = 0.f;
+        s_lastPlayerRight = 0.f;
+        s_hasLastPlayerPosition = false;
     }
 }
 
@@ -37,7 +41,7 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
 
         if (!Mod::get()->getSettingValue<bool>("auto_click")) {
             resetScannerState();
-            m_hasLastPlayerPosition = false;
+            s_hasLastPlayerPosition = false;
             return;
         }
 
@@ -49,7 +53,7 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
         }
 
         const float playerRight = player->getObjectRect().getMaxX();
-        const float previousRight = m_lastPlayerRight;
+        const float previousRight = s_lastPlayerRight;
         const bool hadPreviousPosition = m_hasLastPlayerPosition;
         m_lastPlayerRight = playerRight;
         m_hasLastPlayerPosition = true;
