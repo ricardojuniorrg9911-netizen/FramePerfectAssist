@@ -9,6 +9,12 @@
   "developer": "Ricardo",
   "description": "Configurable frame-perfect input assistant.",
   "settings": {
+    "auto_click": {
+      "name": "Auto-click",
+      "description": "Allow automatic clicks when the assistant feature is implemented.",
+      "type": "bool",
+      "default": false
+    },
     "correction_frames": {
       "name": "Correction window",
       "description": "Configured frame window (2–10). Input correction is not implemented yet.",
