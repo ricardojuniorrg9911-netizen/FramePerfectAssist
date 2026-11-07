@@ -60,7 +60,9 @@ namespace {
             (obstacleRight - playerLeft) / horizontalVelocity * kPhysicsStepsPerSecond
         )));
         const int totalFrames = contactFrames + crossingFrames + 2;
-        constexpr float kClearance = 1.5f;
+        // Remove the extra vertical buffer that made jumps start early.
+        // The predicted path now targets the modeled collision boundary.
+        constexpr float kClearance = 0.0f;
         constexpr float kPhysicsDt = 60.f / kPhysicsStepsPerSecond;
 
         // Search from latest to earliest: the first safe result is the latest
@@ -293,7 +295,6 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
 
 $on_mod(Loaded) {
     const int correction = Mod::get()->getSettingValue<int>("correction_frames");
-    const int anticipation = Mod::get()->getSettingValue<int>("jump_anticipation_frames");
-    log::info("Frame Perfect Assist loaded. Cube auto-jump uses a live-physics trajectory predictor; normal gravity only.");
+    log::info("Frame Perfect Assist loaded. Cube auto-jump uses live-physics trajectory prediction; normal gravity only.");
     log::info("Cube scanner checks hazards and vertically relevant solid blocks; predictive auto-jump remains experimental.");
 }
