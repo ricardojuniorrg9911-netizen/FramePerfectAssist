@@ -1,13 +1,13 @@
 {
   "geode": "5.11.2",
   "gd": {
-    "version": "2.2081"
+    "android": "2.2081"
   },
   "id": "ricardo.frame-perfect-assist",
   "name": "Frame Perfect Assist",
   "version": "v1.0.0",
   "developer": "Ricardo",
-  "description": "Starter project for a configurable frame-perfect input assistant.",
+  "description": "Configurable frame-perfect input assistant.",
   "settings": {
     "correction_frames": {
       "name": "Correction window",
