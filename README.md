@@ -1,17 +1,12 @@
 # Frame Perfect Assist
 
-Starter source project for an Android 64-bit Geode mod for Geometry Dash.
+An Android 64-bit Geode mod prototype for Geometry Dash.
 
 ## Current status
 
-- Includes a configurable setting named `correction_frames`.
-- Minimum: 2 frames.
-- Maximum: 10 frames.
-- Default: 5 frames.
-- Logs the selected value when the mod loads.
+- Adds a configurable `correction_frames` setting.
+- The allowed range is 2–10 frames, with a default of 5.
+- Reads and logs the selected value when the mod loads.
+- Builds are configured for Android 64-bit through GitHub Actions.
 
-**Important:** this is only a starter template. It does not yet detect frame-perfect opportunities, intercept taps, or reschedule input. It is not an installable `.geode` mod until it is built and tested against the exact installed Geometry Dash and Geode versions.
-
-## Build
-
-The GitHub Actions workflow is a starting point for an Android 64-bit build. Confirm that its SDK/action versions match the installed Geode SDK before treating a successful build as proof of compatibility.
+**Not implemented yet:** detecting frame-perfect opportunities, intercepting taps, or correcting/rescheduling input. A successful build only confirms that this prototype compiles; it does not mean the frame-perfect assistant feature is ready.
