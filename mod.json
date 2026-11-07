@@ -11,23 +11,23 @@
   "settings": {
     "auto_click": {
       "name": "Auto-click",
-      "description": "Enable the cube hazard scanner and experimental jump timing.",
+      "description": "Enable the cube obstacle scanner and experimental jump timing.",
       "type": "bool",
       "default": false
     },
     "auto_jump": {
       "name": "Experimental cube auto-jump",
-      "description": "Queues one jump for each detected hazard when the cube is grounded. Timing is experimental; disabled by default.",
+      "description": "Queues one jump for each detected hazard or solid block when the cube is grounded. Timing is experimental; disabled by default.",
       "type": "bool",
       "default": false
     },
     "jump_anticipation_frames": {
       "name": "Jump anticipation",
-      "description": "Base lead time before a detected hazard (20–60 physics frames). Higher values jump earlier.",
+      "description": "Base lead time before a detected obstacle (5–30 physics frames). Lower values jump later; higher values jump earlier.",
       "type": "int",
-      "default": 35,
-      "min": 20,
-      "max": 60
+      "default": 15,
+      "min": 5,
+      "max": 30
     },
     "correction_frames": {
       "name": "Correction window",
