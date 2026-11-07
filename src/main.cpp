@@ -8,13 +8,9 @@ using namespace geode::prelude;
 
 namespace {
     constexpr float kPhysicsStepsPerSecond = 240.f;
-    constexpr float kVelocitySmoothing = 0.25f;
 
     int s_lastReportedObjectID = -1;
     int s_lastLoggedEstimate = -1;
-    float s_smoothedHorizontalVelocity = 0.f;
-    float s_lastPlayerRight = 0.f;
-    bool s_hasLastPlayerPosition = false;
     bool s_jumpReleasePending = false;
     int s_lastAutoJumpObjectID = -1;
 
@@ -115,9 +111,6 @@ namespace {
     void resetScannerState() {
         s_lastReportedObjectID = -1;
         s_lastLoggedEstimate = -1;
-        s_smoothedHorizontalVelocity = 0.f;
-        s_lastPlayerRight = 0.f;
-        s_hasLastPlayerPosition = false;
         s_lastAutoJumpObjectID = -1;
     }
 }
@@ -147,24 +140,10 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
 
         const auto playerRect = player->getObjectRect();
         const float playerRight = playerRect.getMaxX();
-        const float previousRight = s_lastPlayerRight;
-        const bool hadPreviousPosition = s_hasLastPlayerPosition;
-        s_lastPlayerRight = playerRight;
-        s_hasLastPlayerPosition = true;
-
-        if (hadPreviousPosition && dt > 0.0001f) {
-            const float deltaX = playerRight - previousRight;
-            if (deltaX > 0.f) {
-                const float measuredVelocity = deltaX / dt;
-                if (s_smoothedHorizontalVelocity <= 0.f) {
-                    s_smoothedHorizontalVelocity = measuredVelocity;
-                } else {
-                    s_smoothedHorizontalVelocity =
-                        s_smoothedHorizontalVelocity * (1.f - kVelocitySmoothing)
-                        + measuredVelocity * kVelocitySmoothing;
-                }
-            }
-        }
+        // Use GD's live horizontal speed instead of estimating it from render-frame
+        // position deltas. postUpdate can run after multiple 240 Hz physics steps,
+        // and a smoothed render measurement can lag behind speed changes.
+        const float horizontalVelocity = static_cast<float>(player->getCurrentXVelocity());
 
         GameObject* nearestObstacle = nullptr;
         float nearestDistance = std::numeric_limits<float>::max();
@@ -210,9 +189,9 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
         }
 
         const int objectID = nearestObstacle->m_uniqueID;
-        const int estimatedFrames = s_smoothedHorizontalVelocity > 0.001f
+        const int estimatedFrames = horizontalVelocity > 0.001f
             ? static_cast<int>(std::ceil(
-                nearestDistance / s_smoothedHorizontalVelocity * kPhysicsStepsPerSecond
+                nearestDistance / horizontalVelocity * kPhysicsStepsPerSecond
             ))
             : -1;
         const int earlySafetyFrames = Mod::get()->getSettingValue<int>("correction_frames");
@@ -225,7 +204,7 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
             obstacleRect.getMinX(),
             obstacleRect.getMaxX(),
             obstacleRect.getMaxY(),
-            s_smoothedHorizontalVelocity
+            horizontalVelocity
         );
         const int jumpWaitFrames = predictedWaitFrames >= 0
             ? std::max(0, predictedWaitFrames - earlySafetyFrames)
