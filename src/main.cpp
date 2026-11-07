@@ -29,6 +29,84 @@ namespace {
             && !player->m_isSpider;
     }
 
+    int predictLatestSafeJumpWaitFrames(
+        PlayerObject* player,
+        float playerLeft,
+        float playerRight,
+        float playerBottom,
+        float obstacleLeft,
+        float obstacleRight,
+        float obstacleTop,
+        float horizontalVelocity
+    ) {
+        // The current predictor is intentionally limited to a normal-gravity cube.
+        // It uses the live jump/gravity values and simulates the 240 Hz physics ticks.
+        if (!player || player->m_isUpsideDown || horizontalVelocity <= 0.001f) {
+            return -1;
+        }
+
+        const float sizeMultiplier = player->m_vehicleSize != 1.0f ? 0.8f : 1.0f;
+        const float launchVelocity = static_cast<float>(player->m_yStart) * sizeMultiplier;
+        const float gravity = static_cast<float>(player->m_gravity * player->m_gravityMod);
+        if (launchVelocity <= 0.f || gravity <= 0.f) {
+            return -1;
+        }
+
+        const int contactFrames = std::max(1, static_cast<int>(std::ceil(
+            (obstacleLeft - playerRight) / horizontalVelocity * kPhysicsStepsPerSecond
+        )));
+        const float playerWidth = playerRight - playerLeft;
+        const int crossingFrames = std::max(1, static_cast<int>(std::ceil(
+            (obstacleRight - playerLeft) / horizontalVelocity * kPhysicsStepsPerSecond
+        )));
+        const int totalFrames = contactFrames + crossingFrames + 2;
+        constexpr float kClearance = 1.5f;
+        constexpr float kPhysicsDt = 1.f / kPhysicsStepsPerSecond;
+
+        // Search from latest to earliest: the first safe result is the latest
+        // launch tick that clears the complete horizontal overlap interval.
+        for (int waitFrames = contactFrames; waitFrames >= 0; --waitFrames) {
+            float verticalOffset = 0.f;
+            float verticalVelocity = 0.f;
+            bool launched = false;
+            bool overlapped = false;
+            bool safe = true;
+
+            for (int step = 1; step <= totalFrames; ++step) {
+                if (!launched && step == waitFrames + 1) {
+                    verticalVelocity = launchVelocity;
+                    launched = true;
+                } else if (launched) {
+                    // Normal cube gravity branch: velocity is integrated once per
+                    // physics tick using the player's live gravity modifiers.
+                    verticalVelocity -= gravity * kPhysicsDt;
+                }
+
+                if (launched) {
+                    verticalOffset += verticalVelocity * kPhysicsDt;
+                }
+
+                const float futureRight = playerRight
+                    + horizontalVelocity * (static_cast<float>(step) * kPhysicsDt);
+                const float futureLeft = futureRight - playerWidth;
+
+                if (futureRight >= obstacleLeft && futureLeft <= obstacleRight) {
+                    overlapped = true;
+                    if (playerBottom + verticalOffset < obstacleTop + kClearance) {
+                        safe = false;
+                        break;
+                    }
+                }
+            }
+
+            if (safe && overlapped) {
+                return waitFrames;
+            }
+        }
+
+        return -1;
+    }
+
     void resetScannerState() {
         s_lastReportedObjectID = -1;
         s_lastLoggedEstimate = -1;
@@ -132,9 +210,21 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
                 nearestDistance / s_smoothedHorizontalVelocity * kPhysicsStepsPerSecond
             ))
             : -1;
-        const int correctionFrames = Mod::get()->getSettingValue<int>("correction_frames");
-        const int anticipationFrames = Mod::get()->getSettingValue<int>("jump_anticipation_frames");
-        const int jumpTriggerFrames = anticipationFrames + correctionFrames;
+        const int earlySafetyFrames = Mod::get()->getSettingValue<int>("correction_frames");
+        const auto obstacleRect = nearestObstacle->getObjectRect();
+        const int predictedWaitFrames = predictLatestSafeJumpWaitFrames(
+            player,
+            playerRect.getMinX(),
+            playerRight,
+            playerRect.getMinY(),
+            obstacleRect.getMinX(),
+            obstacleRect.getMaxX(),
+            obstacleRect.getMaxY(),
+            s_smoothedHorizontalVelocity
+        );
+        const int jumpWaitFrames = predictedWaitFrames >= 0
+            ? std::max(0, predictedWaitFrames - earlySafetyFrames)
+            : -1;
 
         if (objectID != s_lastReportedObjectID) {
             s_lastReportedObjectID = objectID;
@@ -153,7 +243,7 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
 
         if (estimatedFrames >= 0) {
             if (Mod::get()->getSettingValue<bool>("auto_jump")
-                && estimatedFrames <= jumpTriggerFrames
+                && jumpWaitFrames == 0
                 && player->m_isOnGround
                 && s_lastAutoJumpObjectID != objectID
                 && m_started
@@ -165,11 +255,12 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
                 s_jumpReleasePending = true;
                 s_lastAutoJumpObjectID = objectID;
                 log::info(
-                    "FPA cube auto-jump: queued for {} {} at {} estimated frames (trigger: {}).",
+                    "FPA cube predictive jump: queued for {} {} at the latest safe tick (contact in {} estimated frames, predicted wait {}, early margin {}).",
                     nearestObstacle->m_objectType == GameObjectType::Hazard ? "hazard" : "solid block",
                     nearestObstacle->m_objectID,
                     estimatedFrames,
-                    jumpTriggerFrames
+                    predictedWaitFrames,
+                    earlySafetyFrames
                 );
             }
 
@@ -180,10 +271,10 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
 
             if (changedByTenOrMore) {
                 log::info(
-                    "FPA cube scan: obstacle {} is estimated {} physics frames away (jump trigger: {}).",
+                    "FPA cube scan: obstacle {} is estimated {} physics frames away (predictor wait: {}).",
                     nearestObstacle->m_objectID,
                     estimatedFrames,
-                    jumpTriggerFrames
+                    jumpWaitFrames
                 );
                 s_lastLoggedEstimate = estimatedFrames;
             }
@@ -200,11 +291,6 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
 $on_mod(Loaded) {
     const int correction = Mod::get()->getSettingValue<int>("correction_frames");
     const int anticipation = Mod::get()->getSettingValue<int>("jump_anticipation_frames");
-    log::info(
-        "Frame Perfect Assist loaded. Cube jump trigger: {} physics frames (base {} + margin {}).",
-        anticipation + correction,
-        anticipation,
-        correction
-    );
-    log::info("Cube scanner checks hazards and vertically relevant solid blocks; auto-jump remains experimental.");
+    log::info("Frame Perfect Assist loaded. Cube auto-jump uses a live-physics trajectory predictor; normal gravity only.");
+    log::info("Cube scanner checks hazards and vertically relevant solid blocks; predictive auto-jump remains experimental.");
 }
