@@ -11,19 +11,27 @@
   "settings": {
     "auto_click": {
       "name": "Auto-click",
-      "description": "Enable the diagnostic cube hazard scanner. It estimates arrival in physics frames; it does not send clicks.",
+      "description": "Enable the cube hazard scanner and experimental jump timing.",
       "type": "bool",
       "default": false
     },
     "auto_jump": {
       "name": "Experimental cube auto-jump",
-      "description": "Test only: queues one jump when the cube is grounded and a hazard is inside the correction window. Disabled by default; timing is not yet validated.",
+      "description": "Queues one jump for each detected hazard when the cube is grounded. Timing is experimental; disabled by default.",
       "type": "bool",
       "default": false
     },
+    "jump_anticipation_frames": {
+      "name": "Jump anticipation",
+      "description": "Base lead time before a detected hazard (20–60 physics frames). Higher values jump earlier.",
+      "type": "int",
+      "default": 35,
+      "min": 20,
+      "max": 60
+    },
     "correction_frames": {
       "name": "Correction window",
-      "description": "Target window for the experimental cube jump test (2–10 physics frames).",
+      "description": "Adds 2–10 extra physics frames to the jump anticipation as a timing margin.",
       "type": "int",
       "default": 5,
       "min": 2,
