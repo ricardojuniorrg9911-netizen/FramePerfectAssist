@@ -5,11 +5,25 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
       - name: Build Android 64-bit mod
+        id: build
         uses: geode-sdk/build-geode-mod@main
         with:
           target: Android64
+
+      - name: Upload Geode package
+        uses: actions/upload-artifact@v7
+        with:
+          name: FramePerfectAssist-Android64
+          path: ${{ steps.build.outputs.build-output }}/*.geode
+          if-no-files-found: error
