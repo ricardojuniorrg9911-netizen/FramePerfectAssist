@@ -61,7 +61,7 @@ namespace {
         )));
         const int totalFrames = contactFrames + crossingFrames + 2;
         constexpr float kClearance = 1.5f;
-        constexpr float kPhysicsDt = 1.f / kPhysicsStepsPerSecond;
+        constexpr float kPhysicsDt = 60.f / kPhysicsStepsPerSecond;
 
         // Search from latest to earliest: the first safe result is the latest
         // launch tick that clears the complete horizontal overlap interval.
@@ -77,8 +77,8 @@ namespace {
                     verticalVelocity = launchVelocity;
                     launched = true;
                 } else if (launched) {
-                    // Normal cube gravity branch: velocity is integrated once per
-                    // physics tick using the player's live gravity modifiers.
+                    // GD's physics loop runs 240 ticks/s but passes a 60 Hz-normalized
+                    // delta to PlayerObject::updateJump (60 / 240 = 0.25).
                     verticalVelocity -= gravity * kPhysicsDt;
                 }
 
