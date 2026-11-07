@@ -1,6 +1,8 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayLayer.hpp>
+#include <algorithm>
 #include <cmath>
+#include <limits>
 
 using namespace geode::prelude;
 
@@ -146,6 +148,15 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
                     estimatedFrames,
                     correctionFrames
                 );
+
+                if (enteredCorrectionWindow) {
+                    log::info(
+                        "FPA cube timing diagnostic: hazard {} entered the configured window; cube grounded: {}. This is a timing marker only, not a validated jump command.",
+                        nearestHazard->m_objectID,
+                        player->m_isOnGround ? "yes" : "no"
+                    );
+                }
+
                 s_lastLoggedEstimate = estimatedFrames;
             }
         }
