@@ -7,7 +7,6 @@
 using namespace geode::prelude;
 
 namespace {
-    // Diagnostic-only cube stage. No input is sent until jump timing is validated.
     constexpr float kPhysicsStepsPerSecond = 240.f;
     constexpr float kVelocitySmoothing = 0.25f;
 
@@ -44,7 +43,6 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
     void postUpdate(float dt) {
         PlayLayer::postUpdate(dt);
 
-        // Always release a queued test jump on the following update.
         if (s_jumpReleasePending) {
             this->queueButton(1, false, false, utils::getInputTimestamp());
             if (auto* uiLayer = this->getChildByType<UILayer>(0)) {
@@ -55,14 +53,12 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
 
         if (!Mod::get()->getSettingValue<bool>("auto_click")) {
             resetScannerState();
-            s_hasLastPlayerPosition = false;
             return;
         }
 
         auto* player = m_player1;
         if (!player || player->m_isDead || !isCube(player) || !m_objects) {
             resetScannerState();
-            s_hasLastPlayerPosition = false;
             return;
         }
 
@@ -100,9 +96,6 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
                 continue;
             }
 
-            // If the player's hitbox has begun overlapping this hazard,
-            // keep it as the immediate target instead of producing a negative
-            // distance that could distort the estimated arrival time.
             const float distance = std::max(0.f, hazardRect.getMinX() - playerRight);
             if (distance < nearestDistance) {
                 nearestDistance = distance;
@@ -124,6 +117,8 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
             ))
             : -1;
         const int correctionFrames = Mod::get()->getSettingValue<int>("correction_frames");
+        const int anticipationFrames = Mod::get()->getSettingValue<int>("jump_anticipation_frames");
+        const int jumpTriggerFrames = anticipationFrames + correctionFrames;
 
         if (hazardID != s_lastReportedHazardID) {
             s_lastReportedHazardID = hazardID;
@@ -146,10 +141,10 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
         }
 
         if (estimatedFrames >= 0) {
-            // Experimental cube-only automatic tap. It is separately opt-in,
-            // only fires once per hazard, and requires the cube to be grounded.
+            // Experimental cube-only tap. The lead setting schedules the jump
+            // earlier; correction_frames adds a small extra safety margin.
             if (Mod::get()->getSettingValue<bool>("auto_jump")
-                && estimatedFrames <= correctionFrames
+                && estimatedFrames <= jumpTriggerFrames
                 && player->m_isOnGround
                 && s_lastAutoJumpHazardID != hazardID
                 && m_started
@@ -161,9 +156,10 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
                 s_jumpReleasePending = true;
                 s_lastAutoJumpHazardID = hazardID;
                 log::info(
-                    "FPA cube auto-jump test: queued one jump for hazard {} at estimated {} frames.",
+                    "FPA cube auto-jump test: queued one jump for hazard {} at estimated {} frames (trigger: {}).",
                     nearestHazard->m_objectID,
-                    estimatedFrames
+                    estimatedFrames,
+                    jumpTriggerFrames
                 );
             }
 
@@ -177,20 +173,11 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
 
             if (enteredCorrectionWindow || changedByTenOrMore) {
                 log::info(
-                    "FPA cube scan: hazard {} is now estimated {} physics frames away (configured window: {}).",
+                    "FPA cube scan: hazard {} is now estimated {} physics frames away (diagnostic window: {}).",
                     nearestHazard->m_objectID,
                     estimatedFrames,
                     correctionFrames
                 );
-
-                if (enteredCorrectionWindow) {
-                    log::info(
-                        "FPA cube timing diagnostic: hazard {} entered the configured window; cube grounded: {}. This is a timing marker only, not a validated jump command.",
-                        nearestHazard->m_objectID,
-                        player->m_isOnGround ? "yes" : "no"
-                    );
-                }
-
                 s_lastLoggedEstimate = estimatedFrames;
             }
         }
@@ -199,14 +186,18 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
     void resetLevel() {
         PlayLayer::resetLevel();
         resetScannerState();
-        s_hasLastPlayerPosition = false;
         s_lastPlayerRight = 0.f;
     }
-
 };
 
 $on_mod(Loaded) {
-    const int frames = Mod::get()->getSettingValue<int>("correction_frames");
-    log::info("Frame Perfect Assist loaded. Correction window: {} physics frames.", frames);
-    log::info("Cube hazard scanner is diagnostic. Experimental auto-jump is separately opt-in and disabled by default.");
+    const int correction = Mod::get()->getSettingValue<int>("correction_frames");
+    const int anticipation = Mod::get()->getSettingValue<int>("jump_anticipation_frames");
+    log::info(
+        "Frame Perfect Assist loaded. Cube jump trigger: {} physics frames (base {} + margin {}).",
+        anticipation + correction,
+        anticipation,
+        correction
+    );
+    log::info("Experimental cube auto-jump is opt-in and disabled by default.");
 }
