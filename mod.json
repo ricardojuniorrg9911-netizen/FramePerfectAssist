@@ -11,13 +11,13 @@
   "settings": {
     "auto_click": {
       "name": "Auto-click",
-      "description": "Allow automatic clicks when the assistant feature is implemented.",
+      "description": "Enable the diagnostic cube hazard scanner. It does not send clicks yet.",
       "type": "bool",
       "default": false
     },
     "correction_frames": {
       "name": "Correction window",
-      "description": "Configured frame window (2–10). Input correction is not implemented yet.",
+      "description": "Diagnostic target window (2–10 frames). Automatic input is not implemented yet.",
       "type": "int",
       "default": 5,
       "min": 2,
