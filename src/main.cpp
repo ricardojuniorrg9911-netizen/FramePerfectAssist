@@ -194,18 +194,27 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
                 nearestDistance / horizontalVelocity * kPhysicsStepsPerSecond
             ))
             : -1;
-        const int earlySafetyFrames = Mod::get()->getSettingValue<int>("correction_frames");
-        const auto obstacleRect = nearestObstacle->getObjectRect();
-        const int predictedWaitFrames = predictLatestSafeJumpWaitFrames(
-            player,
-            playerRect.getMinX(),
-            playerRight,
-            playerRect.getMinY(),
-            obstacleRect.getMinX(),
-            obstacleRect.getMaxX(),
-            obstacleRect.getMaxY(),
-            horizontalVelocity
-        );
+        const bool autoJumpEnabled = Mod::get()->getSettingValue<bool>("auto_jump");
+        const int earlySafetyFrames = autoJumpEnabled
+            ? Mod::get()->getSettingValue<int>("correction_frames")
+            : 0;
+
+        // The trajectory predictor performs a multi-tick simulation. Do not run
+        // it during ordinary scanning: it is only needed when auto-jump is enabled.
+        int predictedWaitFrames = -1;
+        if (autoJumpEnabled) {
+            const auto obstacleRect = nearestObstacle->getObjectRect();
+            predictedWaitFrames = predictLatestSafeJumpWaitFrames(
+                player,
+                playerRect.getMinX(),
+                playerRight,
+                playerRect.getMinY(),
+                obstacleRect.getMinX(),
+                obstacleRect.getMaxX(),
+                obstacleRect.getMaxY(),
+                horizontalVelocity
+            );
+        }
         const int jumpWaitFrames = predictedWaitFrames >= 0
             ? std::max(0, predictedWaitFrames - earlySafetyFrames)
             : -1;
@@ -226,7 +235,7 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
         }
 
         if (estimatedFrames >= 0) {
-            if (Mod::get()->getSettingValue<bool>("auto_jump")
+            if (autoJumpEnabled
                 && jumpWaitFrames == 0
                 && player->m_isOnGround
                 && s_lastAutoJumpObjectID != objectID
