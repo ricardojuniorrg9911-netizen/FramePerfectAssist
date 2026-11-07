@@ -86,7 +86,10 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
                 continue;
             }
 
-            const float distance = hazardRect.getMinX() - playerRight;
+            // If the player's hitbox has begun overlapping this hazard,
+            // keep it as the immediate target instead of producing a negative
+            // distance that could distort the estimated arrival time.
+            const float distance = std::max(0.f, hazardRect.getMinX() - playerRight);
             if (distance < nearestDistance) {
                 nearestDistance = distance;
                 nearestHazard = object;
