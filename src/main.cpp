@@ -13,6 +13,10 @@ namespace {
     int s_lastLoggedEstimate = -1;
     bool s_jumpReleasePending = false;
     int s_lastAutoJumpObjectID = -1;
+    int s_predictorObjectID = -1;
+    int s_predictorCachedWait = -1;
+    int s_predictorCachedEstimate = -1;
+    int s_predictorUpdateCounter = 0;
 
     bool isCube(PlayerObject* player) {
         return player
@@ -112,6 +116,10 @@ namespace {
         s_lastReportedObjectID = -1;
         s_lastLoggedEstimate = -1;
         s_lastAutoJumpObjectID = -1;
+        s_predictorObjectID = -1;
+        s_predictorCachedWait = -1;
+        s_predictorCachedEstimate = -1;
+        s_predictorUpdateCounter = 0;
     }
 }
 
@@ -185,6 +193,10 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
             s_lastReportedObjectID = -1;
             s_lastLoggedEstimate = -1;
             s_lastAutoJumpObjectID = -1;
+            s_predictorObjectID = -1;
+            s_predictorCachedWait = -1;
+            s_predictorCachedEstimate = -1;
+            s_predictorUpdateCounter = 0;
             return;
         }
 
@@ -199,21 +211,44 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
             ? Mod::get()->getSettingValue<int>("correction_frames")
             : 0;
 
-        // The trajectory predictor performs a multi-tick simulation. Do not run
-        // it during ordinary scanning: it is only needed when auto-jump is enabled.
+        // Avoid expensive trajectory simulation for distant obstacles. Once the
+        // obstacle is within 120 physics ticks, refresh the prediction periodically
+        // and extrapolate the cached wait from the measured distance between refreshes.
         int predictedWaitFrames = -1;
-        if (autoJumpEnabled) {
-            const auto obstacleRect = nearestObstacle->getObjectRect();
-            predictedWaitFrames = predictLatestSafeJumpWaitFrames(
-                player,
-                playerRect.getMinX(),
-                playerRight,
-                playerRect.getMinY(),
-                obstacleRect.getMinX(),
-                obstacleRect.getMaxX(),
-                obstacleRect.getMaxY(),
-                horizontalVelocity
-            );
+        if (autoJumpEnabled && estimatedFrames >= 0 && estimatedFrames <= 120) {
+            const bool newTarget = s_predictorObjectID != objectID;
+            const int adjustedCachedWait = s_predictorCachedWait >= 0
+                ? s_predictorCachedWait + (s_predictorCachedEstimate - estimatedFrames)
+                : -1;
+            const bool nearLaunch = adjustedCachedWait >= 0 && adjustedCachedWait <= 3;
+            const bool refresh = newTarget
+                || s_predictorCachedWait < 0
+                || nearLaunch
+                || (++s_predictorUpdateCounter % 4 == 0);
+
+            if (refresh) {
+                const auto obstacleRect = nearestObstacle->getObjectRect();
+                s_predictorCachedWait = predictLatestSafeJumpWaitFrames(
+                    player,
+                    playerRect.getMinX(),
+                    playerRight,
+                    playerRect.getMinY(),
+                    obstacleRect.getMinX(),
+                    obstacleRect.getMaxX(),
+                    obstacleRect.getMaxY(),
+                    horizontalVelocity
+                );
+                s_predictorCachedEstimate = estimatedFrames;
+                s_predictorObjectID = objectID;
+            }
+            predictedWaitFrames = s_predictorCachedWait >= 0
+                ? std::max(0, s_predictorCachedWait + (s_predictorCachedEstimate - estimatedFrames))
+                : -1;
+        } else if (s_predictorObjectID != objectID || !autoJumpEnabled || estimatedFrames > 120) {
+            s_predictorObjectID = objectID;
+            s_predictorCachedWait = -1;
+            s_predictorCachedEstimate = estimatedFrames;
+            s_predictorUpdateCounter = 0;
         }
         const int jumpWaitFrames = predictedWaitFrames >= 0
             ? std::max(0, predictedWaitFrames - earlySafetyFrames)
