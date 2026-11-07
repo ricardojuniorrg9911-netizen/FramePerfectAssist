@@ -16,6 +16,8 @@ namespace {
     float s_smoothedHorizontalVelocity = 0.f;
     float s_lastPlayerRight = 0.f;
     bool s_hasLastPlayerPosition = false;
+    bool s_jumpReleasePending = false;
+    int s_lastAutoJumpHazardID = -1;
 
     bool isCube(PlayerObject* player) {
         return player
@@ -34,12 +36,22 @@ namespace {
         s_smoothedHorizontalVelocity = 0.f;
         s_lastPlayerRight = 0.f;
         s_hasLastPlayerPosition = false;
+        s_lastAutoJumpHazardID = -1;
     }
 }
 
 class $modify(FramePerfectPlayLayer, PlayLayer) {
     void postUpdate(float dt) {
         PlayLayer::postUpdate(dt);
+
+        // Always release a queued test jump on the following update.
+        if (s_jumpReleasePending) {
+            this->queueButton(1, false, false, utils::getInputTimestamp());
+            if (auto* uiLayer = this->getChildByType<UILayer>(0)) {
+                uiLayer->m_p1Jumping = false;
+            }
+            s_jumpReleasePending = false;
+        }
 
         if (!Mod::get()->getSettingValue<bool>("auto_click")) {
             resetScannerState();
@@ -101,6 +113,7 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
         if (!nearestHazard) {
             s_lastReportedHazardID = -1;
             s_lastLoggedEstimate = -1;
+            s_lastAutoJumpHazardID = -1;
             return;
         }
 
@@ -133,6 +146,27 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
         }
 
         if (estimatedFrames >= 0) {
+            // Experimental cube-only automatic tap. It is separately opt-in,
+            // only fires once per hazard, and requires the cube to be grounded.
+            if (Mod::get()->getSettingValue<bool>("auto_jump")
+                && estimatedFrames <= correctionFrames
+                && player->m_isOnGround
+                && s_lastAutoJumpHazardID != hazardID
+                && m_started
+                && !m_isPaused) {
+                this->queueButton(1, true, false, utils::getInputTimestamp());
+                if (auto* uiLayer = this->getChildByType<UILayer>(0)) {
+                    uiLayer->m_p1Jumping = true;
+                }
+                s_jumpReleasePending = true;
+                s_lastAutoJumpHazardID = hazardID;
+                log::info(
+                    "FPA cube auto-jump test: queued one jump for hazard {} at estimated {} frames.",
+                    nearestHazard->m_objectID,
+                    estimatedFrames
+                );
+            }
+
             const bool enteredCorrectionWindow =
                 s_lastLoggedEstimate > correctionFrames
                 && estimatedFrames <= correctionFrames;
@@ -174,5 +208,5 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
 $on_mod(Loaded) {
     const int frames = Mod::get()->getSettingValue<int>("correction_frames");
     log::info("Frame Perfect Assist loaded. Correction window: {} physics frames.", frames);
-    log::info("Cube hazard scanner is diagnostic only; no automatic input is sent.");
+    log::info("Cube hazard scanner is diagnostic. Experimental auto-jump is separately opt-in and disabled by default.");
 }
