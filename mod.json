@@ -1,0 +1,21 @@
+{
+  "geode": "5.11.2",
+  "gd": {
+    "version": "2.2081"
+  },
+  "id": "ricardo.frame-perfect-assist",
+  "name": "Frame Perfect Assist",
+  "version": "v1.0.0",
+  "developer": "Ricardo",
+  "description": "Starter project for a configurable frame-perfect input assistant.",
+  "settings": {
+    "correction_frames": {
+      "name": "Correction window",
+      "description": "Configured frame window (2–10). Input correction is not implemented yet.",
+      "type": "int",
+      "default": 5,
+      "min": 2,
+      "max": 10
+    }
+  }
+}
