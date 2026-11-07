@@ -1,14 +1,17 @@
-#include <Geode/Geode.hpp>
+name: Build Geode mod
 
-using namespace geode::prelude;
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
 
-$on_mod(Loaded) {
-    int frames = Mod::get()->getSettingValue<int>("correction_frames");
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
 
-    log::info(
-        "Frame Perfect Assist loaded. Window: {} frames.",
-        frames
-    );
-
-    log::warn("Input correction is not implemented yet.");
-}
+      - name: Build Android 64-bit mod
+        uses: geode-sdk/build-geode-mod@main
+        with:
+          target: Android64
