@@ -268,7 +268,6 @@ class $modify(FramePerfectPlayLayer, PlayLayer) {
     void resetLevel() {
         PlayLayer::resetLevel();
         resetScannerState();
-        s_lastPlayerRight = 0.f;
     }
 };
 
